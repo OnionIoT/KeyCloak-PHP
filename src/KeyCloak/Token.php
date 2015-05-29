@@ -1,5 +1,7 @@
 <?php
 
+namespace OnionIoT\KeyCloak;
+
 class Token {
 	public $token;
 	public $client_id;

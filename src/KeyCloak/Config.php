@@ -1,5 +1,7 @@
 <?php
 
+namespace OnionIoT\KeyCloak;
+
 class Config {
 	/**
 	 * Construct a configuration object.

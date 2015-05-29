@@ -1,5 +1,7 @@
 <?php
 
+namespace OnionIoT\KeyCloak;
+
 class Grant
 {
 	public $access_token;

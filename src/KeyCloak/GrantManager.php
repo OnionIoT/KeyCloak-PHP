@@ -1,5 +1,10 @@
 <?php
 
+namespace OnionIoT\KeyCloak;
+
+use OnionIoT\KeyCloak\Token;
+use OnionIoT\KeyCloak\Grant;
+
 class GrantManager {
 
 	public $realm_url;
