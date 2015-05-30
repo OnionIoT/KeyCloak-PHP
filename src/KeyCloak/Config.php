@@ -100,7 +100,7 @@ class Config {
 			$this->public_key .= "\n";
 		}
 
-		$this.public_key .= "-----END PUBLIC KEY-----\n";
+		$this->public_key .= "-----END PUBLIC KEY-----\n";
 	}
 }
 
