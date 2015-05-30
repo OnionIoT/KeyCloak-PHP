@@ -16,7 +16,11 @@ class Config {
 	 * @constructor
 	 */
 	public function __construct ($config) {
-
+		if (gettype($config) === 'string') {
+			$this->load_configuration($config);
+		} else {
+			$this->configure($config);
+		}
 	}
 
 	/**
@@ -25,7 +29,9 @@ class Config {
 	 * @param {String} $config_path Path to a `keycloak.json` configuration.
 	 */
 	public function load_configuration ($config_path) {
-
+		$json = file_get_contents($config_path);
+		$config = json_decode($json, TRUE);
+		$this->configure($config);
 	}
 
 	/**
@@ -39,6 +45,62 @@ class Config {
 	 * @param {Object} $config The configuration to instill.
 	 */
 	public function configure ($config) {
-		
+		/**
+		 * Realm ID
+		 * @type {String}
+		 */
+		$this->realm = $config['realm'];
+
+		/**
+		 * Client/Application ID
+		 * @type {String}
+		 */
+		$this->client_id = $config['resource'] ? config['resource'] : config['client_id'];
+
+		/**
+		 * Client/Application secret
+		 * @type {String}
+		 */
+		$this->secret = $config['credentials'] ? $config['credentials']['secret'] : $config['secret'];
+
+		/**
+		 * If this is a public application or confidential.
+		 * @type {String}
+		 */
+		$this->public = $config['public-client'] || $config['public'] || FALSE;
+
+		/**
+		 * Authentication server URL
+		 * @type {String}
+		 */
+		$this->auth_server_url = $config['auth-server-url'] ? $config['auth-server-url'] : $config['authServerUrl'];
+
+		/**
+		 * Root realm URL.
+		 * @type {String}
+		 */
+		$this->realm_url = $this->auth_server_url . '/realms/' . $this->realm;
+
+		/**
+		 * Root realm admin URL.
+		 * @type {String}
+		 */
+		$this->realmAdminUrl = $this->auth_server_url . '/admin/realms/' . $this->realm;
+
+		$plain_key = $config['realm-public-key'];
+
+		/**
+		 * Formatted public-key.
+		 * @type {String}
+		 */
+		$this->public_key = "-----BEGIN PUBLIC KEY-----\n";
+
+		for ($i = 0 ; $i < strlen($plain_key); $i += 64) {
+			$this->public_key .= substr($plain_key, $i, $i + 64);
+			$this->public_key .= "\n";
+		}
+
+		$this.public_key .= "-----END PUBLIC KEY-----\n";
 	}
 }
+
