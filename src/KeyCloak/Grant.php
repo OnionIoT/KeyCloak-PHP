@@ -27,8 +27,8 @@ class Grant
 	 *
 	 * @constructor
 	 */
-    public function __construct ($grant) {
-    	$this->update($grant);
+    public function __construct ($grant_data) {
+    	$this->update($grant_data);
     }
 
     /**
@@ -37,14 +37,14 @@ class Grant
 	 * This is used to avoid making client perform extra-bookkeeping
 	 * to maintain the up-to-date/refreshed grant-set.
 	 */
-    public function update ($grant) {
-    	$this->access_token = $grant->access_token;
-		$this->refresh_token = $grant->refresh_token;
-		$this->id_token = $grant->id_token;
+    public function update ($grant_data) {
+    	$this->access_token = array_key_exists('access_token', $grant_data) ? $grant_data['access_token'] : '';
+		$this->refresh_token = array_key_exists('refresh_token', $grant_data) ? $grant_data['refresh_token'] : '';
+		$this->id_token = array_key_exists('id_token', $grant_data) ? $grant_data['id_token'] : '';
 
-		$this->token_type = $grant->token_type;
-		$this->expires_in = $grant->expires_in;
-		$this->_raw = $grant->_raw;
+		$this->token_type = array_key_exists('token_type', $grant_data) ? $grant_data['token_type'] : 'bearer';
+		$this->expires_in = array_key_exists('expires_in', $grant_data) ? $grant_data['expires_in'] : 300;
+		$this->_raw = array_key_exists('_raw', $grant_data) ? $grant_data['_raw'] : '';
     }
 
     /**
@@ -69,7 +69,7 @@ class Grant
 	 */
     public function is_expired () {
     	if (!$this->access_token) {
-			return true;
+			return TRUE;
 		}
 
 		return $this->access_token->is_expired();

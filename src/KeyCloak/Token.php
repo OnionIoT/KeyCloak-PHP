@@ -2,6 +2,8 @@
 
 namespace OnionIoT\KeyCloak;
 
+use OnionIoT\KeyCloak\GrantManager;
+
 class Token {
 	public $token;
 	public $client_id;
@@ -22,7 +24,7 @@ class Token {
 	 * @param {String} $token The JSON Web Token formatted token string.
 	 * @param {String} $client_id Optional clientId if this is an `access_token`.
 	 */
-	public function __construct ($token, $client_id) {
+	public function __construct ($token, $client_id = '') {
 		$this->token = $token;
 		$this->client_id = $client_id;
 
@@ -30,13 +32,13 @@ class Token {
 			try {
 				$parts = explode('.', $token);
 
-				$this->header = json_decode(base64_decode($parts[0]), true);
-				$this->content = json_decode(base64_decode($parts[1]), true);
-				$this->signature = base64_decode($parts[2]);
-				$this->signed = $parts[0] . '.' . parts[1];
+				$this->header = json_decode(GrantManager::url_base64_decode($parts[0]), TRUE);
+				$this->content = json_decode(GrantManager::url_base64_decode($parts[1]), TRUE);
+				$this->signature = GrantManager::url_base64_decode($parts[2]);
+				$this->signed = $parts[0] . '.' . $parts[1];
 			} catch (Exception $e) {
 				$this->content = array(
-					"expires_at" => 0
+					'expires_at' => 0
 				);
 			}
 		}
@@ -49,9 +51,9 @@ class Token {
 	 */
 	public function is_expired () {
 		if (($this->content['exp']) < time()) {
-			return true;
+			return TRUE;
 		} else {
-			return false;
+			return FALSE;
 		}
 	}
 
@@ -78,7 +80,7 @@ class Token {
 	 */
 	public function has_role ($name) {
 		if (!$this->client_id) {
-			return false;
+			return FALSE;
 		}
 
 		$parts = explode(':', $name);
@@ -109,7 +111,7 @@ class Token {
 		$app_roles = $this->content['resource_access'][appName];
 
 		if (!$app_roles) {
-			return false;
+			return FALSE;
 		}
 
 		return (array_search($role_name, $app_roles['roles']) ? TRUE : FALSE);

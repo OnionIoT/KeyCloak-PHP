@@ -12,7 +12,7 @@ class GrantManager {
 	public $secret;
 	public $public_key;
 	public $not_before;
-	public $public;
+	public $is_public;
 
 	/**
 	 * Construct a grant manager.
@@ -22,10 +22,10 @@ class GrantManager {
 	 * @constructor
 	 */
 	public function __construct ($config) {
-		$this->realm_url = $config['realm_url'];
-		$this->client_id = $config['client_id'];
-		$this->secret = $config['secret'];
-		$this->public_key = $config['public_key'];
+		$this->realm_url = $config->realm_url;
+		$this->client_id = $config->client_id;
+		$this->secret = $config->secret;
+		$this->public_key = $config->public_key;
 		$this->not_before = 0;
 	}
 
@@ -54,7 +54,7 @@ class GrantManager {
 			'password' => $password
 		);
 
-		if ($this->public) {
+		if ($this->is_public) {
 			$params['client_id'] = $this->client_id;
 		} else {
 			array_push($headers, 'Basic ' . base64_encode($this->client_id . ':' . $this->secret));
@@ -89,16 +89,6 @@ class GrantManager {
 	}
 
 	/**
-	 * PHP version of Javascript's encodeURIComponent that doesn't covert every character
-	 *
-	 * @param {String} $str The string to be encoded.
-	 */
-	private function _encodeURIComponent ($str) {
-	    $revert = array('%21'=>'!', '%2A'=>'*', '%27'=>"'", '%28'=>'(', '%29'=>')');
-	    return strtr(rawurlencode($str), $revert);
-	}
-
-	/**
 	 * Obtain a grant from a previous interactive login which results in a code.
 	 *
 	 * This is typically used by servers which receive the code through a
@@ -115,21 +105,23 @@ class GrantManager {
 	 * @param {String} $session_id Optional opaque session-id.
 	 * @param {String} $session_host Optional session host for targetted Keycloak console post-backs.
 	 */
-	public function obtain_from_code ($request, $code, $session_id, $session_host) {
+	public function obtain_from_code ($code, $session_id, $session_host = NULL) {
 		$url = $this->realm_url . '/tokens/access/codes';
 
 		// PHP doesn't have request object, need to pass something in...
-		$redirect_uri = $this->_encodeURIComponent(request.session.auth_redirect_uri);
+		// $redirect_uri = GrantManager::encode_uri_component(request.session.auth_redirect_uri);
 
 		$params = array(
 			'code' => $code,
 			'application_session_state' => $session_id,
-			'redirect_uri' => $redirect_uri,
-			'application_session_host' => $session_host
+			// 'redirect_uri' => $redirect_uri,
+			// 'application_session_host' => $session_host
 		);
 
+		$http_query = http_build_query($params);
+		
 		$headers = array(
-			'Content-Length: ' . strlen($params),
+			'Content-Length: ' . strlen($http_query),
 		    'Content-Type: application/x-www-form-urlencoded',
 		    'Authorization: Basic ' . base64_encode($this->client_id . ':' . $this->secret)
 		);
@@ -142,16 +134,21 @@ class GrantManager {
         curl_setopt($request, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($request, CURLOPT_RETURNTRANSFER, TRUE);
 
-        curl_setopt($request, CURLOPT_POSTFIELDS, http_build_query($params));
+        curl_setopt($request, CURLOPT_POSTFIELDS, $http_query);
 
         $response = curl_exec($request);
         $response_code = curl_getinfo($request, CURLINFO_HTTP_CODE);
         curl_close($request);
 
+        // Shit has failed
+        if ($response_code < 200 || $response_code > 299) {
+            return NULL;
+        }
+
         try {
             return $this->create_grant($response);
         } catch (Exception $e) {
-        	return FALSE;
+        	return NULL;
         }
 	}
 
@@ -190,7 +187,7 @@ class GrantManager {
 
 		$params = array(
 			'grant_type' => 'refresh_token',
-			'refresh_token' => $grant->refresh_token['token']
+			'refresh_token' => $grant->refresh_token->token
 		);
 
 		// Making POST request to KeyCloak
@@ -204,10 +201,16 @@ class GrantManager {
         curl_setopt($request, CURLOPT_POSTFIELDS, http_build_query($params));
 
         $response = curl_exec($request);
+        $response_code = curl_getinfo($request, CURLINFO_HTTP_CODE);
         curl_close($request);
 
+        // Shit has failed
+        if ($response_code < 200 || $response_code > 299) {
+            return FALSE;
+        }
+
         try {
-			$grant->update($this->createGrant($response));
+			$grant->update(json_decode($response, TRUE));
 			return TRUE;
 		} catch (Exception $e) {
 			return FALSE;
@@ -263,30 +266,38 @@ class GrantManager {
 	 * @return {Grant} A validated Grant.
 	 */
 	public function create_grant ($raw_data) {
+		if (!$raw_data) {
+			return NULL;
+		}
+
 		$grant_data = json_decode($raw_data, TRUE);
+
+		if (array_key_exists('error', $grant_data)) {
+			return NULL;
+		}
 
 		$access_token = NULL;
 		$refresh_token = NULL;
 		$id_token = NULL;
 
-		if ($grant_data->access_token) {
-			$access_token = new Token($grant_data->access_token, $this->client_id);
+		if (array_key_exists('access_token', $grant_data)) {
+			$access_token = new Token($grant_data['access_token'], $this->client_id);
 		}
 
-		if ($grant_data->refresh_token) {
-			$refresh_token = new Token($grant_data->refresh_token);
+		if (array_key_exists('refresh_token', $grant_data)) {
+			$refresh_token = new Token($grant_data['refresh_token']);
 		}
 
-		if ($grantData->id_token) {
-			$id_token = new Token($grant_data->id_token);
+		if (array_key_exists('id_token', $grant_data)) {
+			$id_token = new Token($grant_data['id_token']);
 		}
 
-		$grant = new Grant((object)array(
+		$grant = new Grant(array(
 			'access_token' => $access_token,
 			'refresh_token' => $refresh_token,
 			'id_token' => $id_token,
-			'expires_in' => $grant_data->expires_in,
-			'token_type' => $grant_data->token_type
+			'expires_in' => $grant_data['expires_in'],
+			'token_type' => $grant_data['token_type']
 		));
 
 		$grant->_raw = $raw_data;
@@ -308,7 +319,7 @@ class GrantManager {
 		$grant->refresh_token = $this->validate_token($grant->refresh_token);
 		$grant->id_token = $this->validate_token($grant->id_token);
 
-		return grant;
+		return $grant;
 	}
 
 	/**
@@ -330,16 +341,16 @@ class GrantManager {
 			return NULL;
 		}
 
-		if ($token->is_expired() || $token->content->iat < $this->not_before) {
+		if ($token->is_expired() || $token->content['iat'] < $this->not_before) {
 			return NULL;
 		}
 
-		$verify = openssl_verify($token->signed, $this->signature, $this->public_key, OPENSSL_ALGO_SHA256);
+		$verify = openssl_verify($token->signed, $token->signature, $this->public_key, 'SHA256');
 
-        if (!$verify) {
-            return NULL;
+        if ($verify === 1) {
+        	return $token;
         } else {
-            return $token;
+            return NULL;
         }
 	}
 
@@ -388,6 +399,49 @@ class GrantManager {
             }
         }
 	}
+
+	/**
+	 * PHP version of Javascript's encodeURIComponent that doesn't covert every character
+	 *
+	 * @param {String} $str The string to be encoded.
+	 */
+	public static function encode_uri_component ($str) {
+        $revert = array(
+            '%21' => '!', 
+            '%2A' => '*', 
+            '%27' => "'", 
+            '%28' => '(', 
+            '%29' => ')'
+        );
+        return strtr(rawurlencode($str), $revert);
+    }
+
+    /**
+     * Decode a string with URL-safe Base64.
+     *
+     * @param string $input A Base64 encoded string
+     *
+     * @return string A decoded string
+     */
+    public static function url_base64_decode ($input) {
+        $remainder = strlen($input) % 4;
+        if ($remainder) {
+            $padlen = 4 - $remainder;
+            $input .= str_repeat('=', $padlen);
+        }
+        return base64_decode(strtr($input, '-_', '+/'));
+    }
+
+    /**
+     * Encode a string with URL-safe Base64.
+     *
+     * @param string $input The string you want encoded
+     *
+     * @return string The base64 encode of what you passed in
+     */
+    public static function url_base64_encode ($input) {
+        return str_replace('=', '', strtr(base64_encode($input), '+/', '-_'));
+    }
 }
 
 

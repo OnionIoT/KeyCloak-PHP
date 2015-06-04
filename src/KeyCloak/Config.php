@@ -55,19 +55,19 @@ class Config {
 		 * Client/Application ID
 		 * @type {String}
 		 */
-		$this->client_id = $config['resource'] ? config['resource'] : config['client_id'];
+		$this->client_id = array_key_exists('resource', $config) ? $config['resource'] : $config['client_id'];
 
 		/**
 		 * Client/Application secret
 		 * @type {String}
 		 */
-		$this->secret = $config['credentials'] ? $config['credentials']['secret'] : $config['secret'];
+		$this->secret = array_key_exists('credentials', $config) ? $config['credentials']['secret'] : (array_key_exists('secret', $config) ? $config['secret'] : NULL);
 
 		/**
 		 * If this is a public application or confidential.
 		 * @type {String}
 		 */
-		$this->public = $config['public-client'] || $config['public'] || FALSE;
+		$this->is_public = array_key_exists('public-client', $config) ? $config['public-client'] : FALSE;
 
 		/**
 		 * Authentication server URL
@@ -87,20 +87,14 @@ class Config {
 		 */
 		$this->realmAdminUrl = $this->auth_server_url . '/admin/realms/' . $this->realm;
 
-		$plain_key = $config['realm-public-key'];
-
 		/**
 		 * Formatted public-key.
 		 * @type {String}
 		 */
-		$this->public_key = "-----BEGIN PUBLIC KEY-----\n";
+		$plain_key = $config['realm-public-key'];
+		$key_parts = str_split($plain_key, 64);
 
-		for ($i = 0 ; $i < strlen($plain_key); $i += 64) {
-			$this->public_key .= substr($plain_key, $i, $i + 64);
-			$this->public_key .= "\n";
-		}
-
-		$this->public_key .= "-----END PUBLIC KEY-----\n";
+		$this->public_key = "-----BEGIN PUBLIC KEY-----\n" . implode("\n", $key_parts) . "\n-----END PUBLIC KEY-----\n";
 	}
 }
 
