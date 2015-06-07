@@ -2,15 +2,14 @@
 
 namespace OnionIoT\KeyCloak;
 
-use OnionIoT\KeyCloak\GrantManager;
-
 class Token {
-	public $token;
-	public $client_id;
 	public $header;
-	public $content;
+	public $payload;
 	public $signature;
 	public $signed;
+
+	protected $_raw;
+	protected $client_id;
 
 	/**
 	 * Construct a token.
@@ -24,20 +23,20 @@ class Token {
 	 * @param {String} $token The JSON Web Token formatted token string.
 	 * @param {String} $client_id Optional clientId if this is an `access_token`.
 	 */
-	public function __construct ($token, $client_id = '') {
-		$this->token = $token;
+	public function __construct ($token_str, $client_id = '') {
+		$this->_raw = $token_str;
 		$this->client_id = $client_id;
 
-		if ($token) {
+		if ($token_str) {
 			try {
-				$parts = explode('.', $token);
+				$parts = explode('.', $token_str);
 
 				$this->header = json_decode(GrantManager::url_base64_decode($parts[0]), TRUE);
-				$this->content = json_decode(GrantManager::url_base64_decode($parts[1]), TRUE);
+				$this->payload = json_decode(GrantManager::url_base64_decode($parts[1]), TRUE);
 				$this->signature = GrantManager::url_base64_decode($parts[2]);
 				$this->signed = $parts[0] . '.' . $parts[1];
 			} catch (Exception $e) {
-				$this->content = array(
+				$this->payload = array(
 					'expires_at' => 0
 				);
 			}
@@ -45,12 +44,24 @@ class Token {
 	}
 
 	/**
+	 * Returns the raw String of the grant, if available.
+	 *
+	 * If the raw string is unavailable (due to programatic construction)
+	 * then `undefined` is returned.
+	 */
+    public function to_string () {
+    	return $this->_raw;
+    }
+
+	/**
 	 * Determine if this token is expired.
 	 *
 	 * @return {boolean} `true` if it is expired, otherwise `false`.
 	 */
 	public function is_expired () {
-		if (($this->content['exp']) < time()) {
+		$current_time = time();
+
+		if ($this->payload['exp'] < $current_time || $this->payload['iat'] < $current_time - 86400) {
 			return TRUE;
 		} else {
 			return FALSE;
@@ -86,7 +97,7 @@ class Token {
 		$parts = explode(':', $name);
 
 		if (count($parts) === 1) {
-			return $this->hasApplicationRole($this->client_id, $parts[0]);
+			return $this->has_application_role($this->client_id, $parts[0]);
 		}
 
 		if ($parts[0] === 'realm') {
@@ -108,7 +119,7 @@ class Token {
 	 * @return {boolean} `true` if this token has the specified role, otherwise `false`.
 	 */
 	public function has_application_role ($app_name, $role_name) {
-		$app_roles = $this->content['resource_access'][appName];
+		$app_roles = $this->payload['resource_access'][appName];
 
 		if (!$app_roles) {
 			return FALSE;
@@ -129,7 +140,7 @@ class Token {
 	 * @return {boolean} `true` if this token has the specified role, otherwise `false`.
 	 */
 	public function has_realm_role ($role_name) {
-		return (array_search($role_name, $this->content['realm_access']['roles']) ? TRUE : FALSE);
+		return (array_search($role_name, $this->payload['realm_access']['roles']) ? TRUE : FALSE);
 	}
 }
 

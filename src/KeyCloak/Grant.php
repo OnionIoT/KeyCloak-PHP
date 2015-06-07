@@ -7,10 +7,12 @@ class Grant
 	public $access_token;
 	public $refresh_token;
 	public $id_token;
+	
+	protected $client_id;
+	protected $token_type;
+	protected $expires_in;
 
-	public $token_type;
-	public $expires_in;
-	public $_raw;
+	protected $_raw;
 
 	/**
 	 * Construct a new grant.
@@ -28,23 +30,21 @@ class Grant
 	 * @constructor
 	 */
     public function __construct ($grant_data) {
-    	$this->update($grant_data);
-    }
+    	if (gettype($grant_data) === 'string') {
+    		$this->_raw = $grant_data;
+            $grant_data = json_decode($this->_raw, TRUE);
+    	} else {
+    		$this->_raw = json_encode($grant_data);
+    	}
 
-    /**
-	 * Update this grant in-place given data in another grant.
-	 *
-	 * This is used to avoid making client perform extra-bookkeeping
-	 * to maintain the up-to-date/refreshed grant-set.
-	 */
-    public function update ($grant_data) {
-    	$this->access_token = array_key_exists('access_token', $grant_data) ? $grant_data['access_token'] : '';
-		$this->refresh_token = array_key_exists('refresh_token', $grant_data) ? $grant_data['refresh_token'] : '';
-		$this->id_token = array_key_exists('id_token', $grant_data) ? $grant_data['id_token'] : '';
+    	$this->client_id = array_key_exists('client_id', $grant_data) ? $grant_data['client_id'] : '';
+
+    	$this->access_token = array_key_exists('access_token', $grant_data) ? new Token($grant_data['access_token'], $this->client_id) : NULL;
+		$this->refresh_token = array_key_exists('refresh_token', $grant_data) ? new Token($grant_data['refresh_token'], $this->client_id) : NULL;
+		$this->id_token = array_key_exists('id_token', $grant_data) ? new Token($grant_data['id_token'], $this->client_id) : NULL;
 
 		$this->token_type = array_key_exists('token_type', $grant_data) ? $grant_data['token_type'] : 'bearer';
 		$this->expires_in = array_key_exists('expires_in', $grant_data) ? $grant_data['expires_in'] : 300;
-		$this->_raw = array_key_exists('_raw', $grant_data) ? $grant_data['_raw'] : '';
     }
 
     /**
