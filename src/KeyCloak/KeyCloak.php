@@ -95,22 +95,23 @@ class KeyCloak {
 	 * @return {Boolean} TRUE for success or FALSE for failure
 	 */
 	public function grant_from_login ($username, $password) {
-		$headers = array(
-		    'Content-type: application/x-www-form-urlencoded'
-		);
-
 		$params = array(
+			'grant_type' => 'password',
 			'username' => $username,
 			'password' => $password
+		);
+
+		$headers = array(
+		    'Content-type: application/x-www-form-urlencoded'
 		);
 
 		if ($this->is_public) {
 			$params['client_id'] = $this->client_id;
 		} else {
-			array_push($headers, 'Basic ' . base64_encode($this->client_id . ':' . $this->secret));
+			array_push($headers, 'Authorization: Basic ' . base64_encode($this->client_id . ':' . $this->secret));
 		}
 
-		$response = $this->send_request('POST', '/tokens/grants/access', $headers, http_build_query($params));
+		$response = $this->send_request('POST', '/protocol/openid-connect/token', $headers, http_build_query($params));
 
         if ($response['code'] < 200 || $response['code'] > 299) {
             return FALSE;
@@ -139,23 +140,32 @@ class KeyCloak {
 	 *
 	 * @return {Boolean} TRUE for success or FALSE for failure
 	 */
-	public function grant_from_code ($code, $session_id, $session_host = NULL) {
+	public function grant_from_code ($code, $redirect_uri = '', $session_host = NULL) {
 		$params = array(
+			'grant_type' => 'authorization_code',
 			'code' => $code,
-			'application_session_state' => $session_id,
-			// 'redirect_uri' => GrantManager::encode_uri_component(request.session.auth_redirect_uri),
+			'client_id' => $this->client_id
 		);
+
+		if (!empty($redirect_uri)) {
+			$params['redirect_uri'] = $redirect_uri;
+		}
 
 		if ($session_host) {
 			$params['application_session_host'] = $session_host;
 		}
 		
 		$headers = array(
-		    'Content-Type: application/x-www-form-urlencoded',
-		    'Authorization: Basic ' . base64_encode($this->client_id . ':' . $this->secret)
+		    'Content-Type: application/x-www-form-urlencoded'
 		);
 
-		$response = $this->send_request('POST', '/tokens/access/codes', $headers, http_build_query($params));
+		if ($this->is_public) {
+			$params['client_id'] = $this->client_id;
+		} else {
+			array_push($headers, 'Authorization: Basic ' . base64_encode($this->client_id . ':' . $this->secret));
+		}
+
+		$response = $this->send_request('POST', '/protocol/openid-connect/token', $headers, http_build_query($params));
 
         // Shit has failed
         if ($response['code'] < 200 || $response['code'] > 299) {
@@ -215,17 +225,22 @@ class KeyCloak {
 			return FALSE;
 		}
 
-		$headers = array(
-		    'Content-type: application/x-www-form-urlencoded',
-		    'Authorization: Basic ' . base64_encode($this->client_id . ':' . $this->secret)
-		);
-
 		$params = array(
 			'grant_type' => 'refresh_token',
 			'refresh_token' => $this->grant->refresh_token->to_string()
 		);
+
+		$headers = array(
+		    'Content-type: application/x-www-form-urlencoded'
+		);
+
+		if ($this->is_public) {
+			$params['client_id'] = $this->client_id;
+		} else {
+			array_push($headers, 'Authorization: Basic ' . base64_encode($this->client_id . ':' . $this->secret));
+		}
         
-        $response = $this->send_request('POST', '/tokens/refresh', $headers, http_build_query($params));
+        $response = $this->send_request('POST', '/protocol/openid-connect/token', $headers, http_build_query($params));
 
         // Shit has failed
         if ($response['code'] < 200 || $response['code'] > 299) {
@@ -285,7 +300,7 @@ class KeyCloak {
 				'access_token' => gettype($token) === 'string' ? $token : $token->to_string()
 			);
 
-			$path = '/tokens/validate' . http_build_query($params);
+			$path = '/tokens/validate?' . http_build_query($params);
 
 			$response = $this->send_request('GET', $path);
 
@@ -337,7 +352,7 @@ class KeyCloak {
 			    'Accept: application/json'
 			);
 
-			$response = $this->send_request('GET', '/account', $headers);
+			$response = $this->send_request('GET', '/protocol/openid-connect/userinfo', $headers);
 
 			if ($response['code'] < 200 || $response['code'] > 299) {
 	            return NULL;
@@ -374,22 +389,18 @@ class KeyCloak {
 	/**
 	* Various URL getters
 	**/
-	public function login_url ($redirect_url) {
+	public function login_url ($redirect_uri) {
         $uuid = bin2hex(openssl_random_pseudo_bytes(32));
 
-        return $this->realm_url . '/tokens/login?client_id=' . KeyCloak::encode_uri_component($this->client_id) . '&state=' . KeyCloak::encode_uri_component($uuid) . '&redirect_url=' . KeyCloak::encode_uri_component($redirect_url);
+        return $this->realm_url . '/protocol/openid-connect/auth?client_id=' . KeyCloak::encode_uri_component($this->client_id) . '&state=' . KeyCloak::encode_uri_component($uuid) . '&redirect_uri=' . KeyCloak::encode_uri_component($redirect_uri) . '&response_type=code';
     }
 
-    public function logout_url ($redirect_url = '') {
-        if (empty($redirect_url)) {
-            $redirect_url = current_url();
-        }
-
-        return $this->realm_url . '/tokens/logout?redirect_uri=' . KeyCloak::encode_uri_component($redirect_url);
+    public function logout_url ($redirect_uri) {
+        return $this->realm_url . '/protocol/openid-connect/logout?redirect_uri=' . KeyCloak::encode_uri_component($redirect_uri);
     }
 
-    public function account_url () {
-        return $this->realm_url . '/account';
+    public function account_url ($redirect_uri) {
+        return $this->realm_url . '/account' . '?referrer=' . KeyCloak::encode_uri_component($this->client_id) . '&referrer_uri=' . KeyCloak::encode_uri_component($redirect_uri);
     }
 
 	/**
