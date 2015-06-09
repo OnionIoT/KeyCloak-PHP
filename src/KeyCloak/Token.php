@@ -31,9 +31,9 @@ class Token {
 			try {
 				$parts = explode('.', $token_str);
 
-				$this->header = json_decode(GrantManager::url_base64_decode($parts[0]), TRUE);
-				$this->payload = json_decode(GrantManager::url_base64_decode($parts[1]), TRUE);
-				$this->signature = GrantManager::url_base64_decode($parts[2]);
+				$this->header = json_decode(KeyCloak::url_base64_decode($parts[0]), TRUE);
+				$this->payload = json_decode(KeyCloak::url_base64_decode($parts[1]), TRUE);
+				$this->signature = KeyCloak::url_base64_decode($parts[2]);
 				$this->signed = $parts[0] . '.' . $parts[1];
 			} catch (Exception $e) {
 				$this->payload = array(
